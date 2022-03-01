@@ -1,5 +1,3 @@
-import os
-
 import torchvision
 import torchvision.transforms
 import json
@@ -62,6 +60,3 @@ def load_session1(path):
     look = np.array([[p['lookAngleX'], p['lookAngleY'], p['lookAngleZ']] for p in player])
 
     return target_images, player, eye, forward, look, data
-
-
-def load_data(

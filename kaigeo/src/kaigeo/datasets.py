@@ -1,3 +1,7 @@
+from typing import Tuple
+from dataclasses import dataclass
+import os
+
 import json
 from urllib.request import urlopen
 
@@ -7,9 +11,24 @@ import torchvision
 import torchvision.transforms
 from PIL import Image
 
+files_root = os.path.join(*os.path.split(__file__)[:-1], "files")
 
-def load_session1(path):
-    with open(path) as f:
+
+def get_file_path(name: str) -> str:
+    return os.path.join(files_root, name)
+
+
+@dataclass
+class Session:
+    target_images: torch.Tensor
+    player: torch.Tensor
+    eye: torch.Tensor
+    forward: torch.Tensor
+    look: torch.Tensor
+
+
+def load_session1() -> Session:
+    with open(get_file_path("data-1645820672906.json")) as f:
         data = json.load(f)
 
     frames = []
@@ -38,5 +57,10 @@ def load_session1(path):
         [[p["lookAngleX"], p["lookAngleY"], p["lookAngleZ"]] for p in player]
     )
 
-    return target_images, player, eye, forward, look, data
-
+    return Session(
+        target_images=target_images,
+        player=player,
+        eye=eye,
+        forward=forward,
+        look=look,
+    )
