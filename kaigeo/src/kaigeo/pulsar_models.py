@@ -73,8 +73,8 @@ class PulsarModel(nn.Module):
 
         self.renderer = Renderer(width, height, n_points, right_handed_system=True)
 
-    def set_grads(self, pos, camera):
-        self.geometry_model.pos.requires_grad = pos
+    #def set_grads(self, pos, camera):
+        #self.geometry_model.pos.requires_grad = pos
         #self.camera.angle_to_rot.requires_grad = camera
 
     def forward(self, i):
@@ -91,7 +91,7 @@ class PulsarModel(nn.Module):
                 camera_pos[:, 2],
                 # rotations
                 camera_rot[:, 0],
-                camera_rot[:, 1],
+                camera_rot[:, 1] + math.pi,
                 camera_rot[:, 2],
                 torch.tensor([5.0] * batch_size, device=self.geometry_model.pos.device),
                 torch.tensor([2.0] * batch_size, device=self.geometry_model.pos.device),
@@ -106,7 +106,7 @@ class PulsarModel(nn.Module):
                 batch_size, torch.max(self.geometry_model.rad, torch.tensor(0.01))
             ),  # * 100.0 + 0.001,
             cam_params,
-            0.9,  # 1.0,  # Renderer blending parameter gamma, in [1., 1e-5].
+            0.001,  # 1.0,  # Renderer blending parameter gamma, in [1., 1e-5].
             45.0,  # Maximum depth.
             bg_col=torch.sigmoid(self.camera.bg_color),
         )
