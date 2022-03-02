@@ -28,13 +28,23 @@ class Session:
 
 
 def load_session1() -> Session:
-    with open(get_file_path("data-1645820672906.json")) as f:
+    return load_session("data-1645820672906.json")
+
+
+def load_session2() -> Session:
+    return load_session("data-1646180076202.json")
+
+
+def load_session(path: str) -> Session:
+    with open(get_file_path(path)) as f:
         data = json.load(f)
 
     frames = []
     player = []
 
     for messagePack in data["messages"]:
+        if messagePack["frame"] is None:
+            continue
         image = Image.open(urlopen(messagePack["frame"]["data"]))
         messages = messagePack["messages"]
         # Pick the one of type player.
