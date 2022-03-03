@@ -102,39 +102,19 @@ class VolumeModel(nn.Module):
         # Generate a 32 x 32 x 32 latent space
         self.latent = nn.Sequential(
             nn.Linear(30, 60),
-            nn.Softplus(),
+            nn.Sigmoid(),
             nn.Linear(60, 480),
-            nn.Softplus(),
-            nn.Linear(480, 480),
-            nn.Softplus(),
+            nn.Sigmoid(),
             nn.Linear(480, 16 * 16 * 16 * 4),
+            nn.Sigmoid(),
         )
-
-        #  Generate a 32 x 32 x 32 latent space
-        self.harmonic_embedding = HarmonicEmbedding()
-        embedding_dim = 60 * 2 * 3
-
-        self.latent2 = nn.Sequential(
-            nn.Linear(30 + embedding_dim, 60),
-            nn.Softplus(),
-            nn.Linear(60, 480),
-            nn.Softplus(),
-            nn.Linear(480, 480),
-            nn.Softplus(),
-            nn.Linear(480, 4)
-        )
-
-
-    def generate_volume2(self, zs):
-        pass
 
     def generate_volume(self, zs):
         latent = self.latent(zs).reshape(
             -1, 4, self.latent_dim, self.latent_dim, self.latent_dim
         )
-        densities = torch.sigmoid(latent[:, 0:1])
-
-        colors = torch.sigmoid(latent[:, 1:4])
+        densities = latent[:, 0:3]
+        colors = latent[:, 3:4]
 
         # Generate a bunch of volume
         # The output of the latent space is a set of volumes
@@ -153,9 +133,10 @@ class VolumeModel(nn.Module):
         # (the 2nd output is a representation of the sampled
         # rays which can be omitted for our purpose).
         imgs = self.renderer(cameras=cameras, volumes=volumes)[0]
+        # return densities, and features
         return (
-            imgs[..., 0:1],
-            imgs[..., 1:4],
+            imgs[..., 3:4],
+            imgs[..., 0:3],
         )
 
     def generate(self, n):
