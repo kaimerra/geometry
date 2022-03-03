@@ -3,7 +3,7 @@ from torch import nn
 
 import numpy as np
 
-# from nerf_models import HarmonicEmbedding
+from .nerf_models import HarmonicEmbedding
 
 from pytorch3d.structures import Volumes
 from pytorch3d.renderer import (
@@ -13,12 +13,37 @@ from pytorch3d.renderer import (
     EmissionAbsorptionRaymarcher,
     look_at_view_transform,
     FoVPerspectiveCameras,
+    RayBundle,
 )
 
 
-def generate_cameras(n, device, random=False):
-    r = np.random.random()
+class TileBasedImplicitRenderer(nn.Module):
+    def __init__(self):
+        super().__init__()
 
+        self.total_width = 10
+        self.total_depth = 10
+
+        # go  from 30 to 20 x 20 x dim
+        self.latent_map = torch.Linear(30, 20 * 20 * 10)
+
+    def render(self, ray_bundle: RayBundle, **kwargs):
+        world_points = ray_bundle_to_ray_points()
+        # Basically now
+        # z creates a latent space a 2d map
+        # that 2d map then parametrizes a function
+        # nerf(local position, parameter)
+        # lets take each
+        # get indices
+        indices_long = ((world_points[..., 0:0]) / self.total_width).long()
+        indices_float = indices_long.float()
+
+        localized_world_points = world_points - indices_float
+
+        pass
+
+
+def generate_cameras(n, device, random=True):
     Rs = []
     Ts = []
     for i in range(n):
@@ -53,7 +78,7 @@ class VolumeModel(nn.Module):
         self.raysampler = NDCGridRaysampler(
             image_width=64,
             image_height=64,
-            n_pts_per_ray=150,
+            n_pts_per_ray=300,
             min_depth=0.1,
             max_depth=3.0,
         )
@@ -72,29 +97,44 @@ class VolumeModel(nn.Module):
             raymarcher=self.raymarcher,
         )
 
+        self.latent_dim = 16
+
         # Generate a 32 x 32 x 32 latent space
         self.latent = nn.Sequential(
             nn.Linear(30, 60),
-            nn.Sigmoid(),
+            nn.Softplus(),
             nn.Linear(60, 480),
-            nn.Sigmoid(),
+            nn.Softplus(),
             nn.Linear(480, 480),
-            nn.Sigmoid(),
-            nn.Linear(480, 32 * 32 * 32 * 4),
-            nn.Sigmoid(),
+            nn.Softplus(),
+            nn.Linear(480, 16 * 16 * 16 * 4),
         )
 
-    def forward(self, cameras, zs):
-        batch_size = cameras.R.shape[0]
+        #  Generate a 32 x 32 x 32 latent space
+        self.harmonic_embedding = HarmonicEmbedding()
+        embedding_dim = 60 * 2 * 3
 
-        # Convert the log-space values to the densities/colors
-        # densities = torch.sigmoid(self.log_densities)
+        self.latent2 = nn.Sequential(
+            nn.Linear(30 + embedding_dim, 60),
+            nn.Softplus(),
+            nn.Linear(60, 480),
+            nn.Softplus(),
+            nn.Linear(480, 480),
+            nn.Softplus(),
+            nn.Linear(480, 4)
+        )
 
-        latent = self.latent(zs).reshape(-1, 4, 32, 32, 32)
-        densities = latent[:, 0:1]
 
-        # print(torch.max(densities))
-        colors = latent[:, 1:4]
+    def generate_volume2(self, zs):
+        pass
+
+    def generate_volume(self, zs):
+        latent = self.latent(zs).reshape(
+            -1, 4, self.latent_dim, self.latent_dim, self.latent_dim
+        )
+        densities = torch.sigmoid(latent[:, 0:1])
+
+        colors = torch.sigmoid(latent[:, 1:4])
 
         # Generate a bunch of volume
         # The output of the latent space is a set of volumes
@@ -103,12 +143,16 @@ class VolumeModel(nn.Module):
             features=colors,
             voxel_size=self.voxel_size,
         )
+
+        return volumes
+
+    def forward(self, cameras, zs):
+        volumes = self.generate_volume(zs)
         # Given cameras and volumes, run the renderer
         # and return only the first output value
         # (the 2nd output is a representation of the sampled
         # rays which can be omitted for our purpose).
         imgs = self.renderer(cameras=cameras, volumes=volumes)[0]
-
         return (
             imgs[..., 0:1],
             imgs[..., 1:4],
@@ -126,7 +170,6 @@ class LatentSpace(nn.Module):
     def __init__(self, device):
         super().__init__()
 
-        # self.h = nerf_models.HarmonicEmbedding()
         self.device = device
 
         self.latent_dim = 320
