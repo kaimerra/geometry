@@ -55,9 +55,11 @@ def load_session(path: str) -> Session:
         else:
             raise Exception("Could not find player")
         # player.append(messages[0])
-        frames.append(torchvision.transforms.ToTensor()(image))
+        # frames.append(torchvision.transforms.ToTensor()(image))
+        frames.append(image)
 
-    transformed_frames = [torchvision.transforms.Resize((128, 128))(f) for f in frames]
+    transformed_frames = [torchvision.transforms.ToTensor()(torchvision.transforms.Resize((128, 128))(f)) for f in frames]
+
     target_images = torch.stack(transformed_frames)
     target_images = target_images.permute(0, 2, 3, 1)[:, :, :, :3]
 

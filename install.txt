@@ -1,0 +1,25 @@
+#Roughly the below should stand up a mac environment to run the included notebooks:
+
+# Create environment
+conda create python=3.9 -n geometry
+conda activate geometry
+
+# Pip install all the things
+pip install torch==1.10.0 torchvision torchaudio     
+pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.10.0+cpu.html
+pip install black 'isort<5' flake8 flake8-bugbear flake8-comprehensions
+pip install scikit-image matplotlib imageio plotly opencv-python       
+pip install pytorch3d
+pip install -e ./kaigeo
+pip install torchgan
+
+# Conda needs stuff too
+conda install jupyter       
+conda install -c fvcore -c iopath -c conda-forge fvcore iopath
+conda install -c pytorch pytorch=1.9.1 torchvision
+
+# Not sure why this is required but for some reason conda gets a dumb numpy package that stops torchgan from installing. Removing it solves the problem.
+rm -r ~/miniconda3/envs/geometry/lib/python3.9/site-packages/numpy-1.22.2.dist-info 
+
+# For visualizations 
+pip install open3d
