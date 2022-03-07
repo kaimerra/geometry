@@ -23,3 +23,25 @@ rm -r ~/miniconda3/envs/geometry/lib/python3.9/site-packages/numpy-1.22.2.dist-i
 
 # For visualizations 
 pip install open3d
+
+
+
+# Installing on windows
+
+# Create environment
+conda create python=3.9 -n geometry
+conda activate geometry
+
+# Pip install all the things
+pip install torch==1.10.0 torchvision torchaudio     
+pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.10.0+cpu.html
+# pip install black 'isort<5' flake8 flake8-bugbear flake8-comprehensions #Doesn't work for some reason
+pip install scikit-image matplotlib imageio plotly opencv-python       
+pip install "git+https://github.com/facebookresearch/pytorch3d.git" #Changed on windows
+pip install -e ./kaigeo
+pip install torchgan
+
+# Conda needs stuff too
+conda install jupyter       
+conda install -c fvcore -c iopath -c conda-forge fvcore iopath
+conda install -c pytorch pytorch=1.9.1 torchvision
