@@ -97,7 +97,7 @@ class VolumeModel(nn.Module):
             raymarcher=self.raymarcher,
         )
 
-        self.latent_dim = 16
+        self.latent_dim = 32
 
         # Generate a 32 x 32 x 32 latent space
         self.latent = nn.Sequential(
@@ -105,7 +105,7 @@ class VolumeModel(nn.Module):
             nn.Sigmoid(),
             nn.Linear(60, 480),
             nn.Sigmoid(),
-            nn.Linear(480, 16 * 16 * 16 * 4),
+            nn.Linear(480, self.latent_dim ** 3 * 4),
             nn.Sigmoid(),
         )
 
@@ -113,8 +113,8 @@ class VolumeModel(nn.Module):
         latent = self.latent(zs).reshape(
             -1, 4, self.latent_dim, self.latent_dim, self.latent_dim
         )
-        densities = latent[:, 0:3]
-        colors = latent[:, 3:4]
+        densities = latent[:, 3:4]
+        colors = latent[:, 0:3]
 
         # Generate a bunch of volume
         # The output of the latent space is a set of volumes
@@ -146,62 +146,77 @@ class VolumeModel(nn.Module):
         z = torch.randn((n, 30), device=self.device)
         return self.forward(cameras, z)
 
+    #def sample_densities(self, n):
+    #    # first convert the ray origins, directions and lengths
+    #    # to 3D ray point locations in world coords
+    #z = torch.randn((n, 30), device=self.device)
+    #    latent = self.latent(z)
+    #    return latent[..., 3:4]
 
-class LatentSpace(nn.Module):
-    def __init__(self, device):
-        super().__init__()
 
-        self.device = device
-
-        self.latent_dim = 320
-        # A latent represention.
-        self.latent = nn.Sequential(
-            nn.Linear(30, 40),
-            nn.Sigmoid(),
-            nn.Linear(40, 80),
-            nn.Sigmoid(),
-            nn.Linear(80, 320),
-            nn.Sigmoid(),
-        )
-
-        # Now we go from latent
-        # + pos to density
-        self.func = nn.Sequential(
-            nn.Linear(3 + self.latent_dim, 20),
-            nn.Sigmoid(),
-            nn.Linear(20, 4),
-            nn.Sigmoid(),
-        )
-
-    def forward(self, X, z):
-        # Let's assume one batch
-        # latent will be b x latent_dim.
-        latent = self.latent(z)
-
-        input = X.reshape(-1, 3)
-        # ok so now we should have changed the size
-        latent = latent.expand(X.shape[0], input.shape[0], self.latent_dim)[0]
-        concatted = torch.concat([input, latent], axis=1)
-
-        sampled = self.func(concatted)
-        # self.func(
-        # for f_l, c_l in zip(self.func, self.conditioner):
-        #    input = f_l(z)
-        # input = f_l(input)
-
-        # print(input.shape)
-
-        new_shape = list(X.shape)
-        new_shape[-1] = 4
-        # X comes in as a batch X ... X 3
-        return sampled.reshape(new_shape)
-
-    def gen(self, ray_bundle, z, **kwargs):
-        rays_points_world = ray_bundle_to_ray_points(ray_bundle)
-        res = self(rays_points_world, z)
-        return res[..., 0:1], res[..., 1:]
-
-    def random_gen(self, ray_bundle, **kwargs):
-        # first convert the ray origins, directions and lengths
-        # to 3D ray point locations in world coords
-        return self.gen(ray_bundle, torch.randn((30,), device=self.device))
+# class LatentSpace(nn.Module):
+#    def __init__(self, device):
+#        super().__init__()
+#
+#        self.device = device
+#
+#        self.latent_dim = 320
+#        # A latent represention.
+#        self.latent = nn.Sequential(
+#            nn.Linear(30, 40),
+#            nn.Sigmoid(),
+#            nn.Linear(40, 80),
+#            nn.Sigmoid(),
+#            nn.Linear(80, 320),
+#            nn.Sigmoid(),
+#        )
+#
+#        # Now we go from latent
+#        # + pos to density
+#        self.func = nn.Sequential(
+#            nn.Linear(3 + self.latent_dim, 20),
+#            nn.Sigmoid(),
+#            nn.Linear(20, 4),
+#            nn.Sigmoid(),
+#        )
+#
+#    def forward(self, X, z):
+#        # Let's assume one batch
+#        # latent will be b x latent_dim.
+#        latent = self.latent(z)
+#
+#        input = X.reshape(-1, 3)
+#        # ok so now we should have changed the size
+#        latent = latent.expand(X.shape[0], input.shape[0], self.latent_dim)[0]
+#        concatted = torch.concat([input, latent], axis=1)
+#
+#        sampled = self.func(concatted)
+#        # self.func(
+#        # for f_l, c_l in zip(self.func, self.conditioner):
+#        #    input = f_l(z)
+#        # input = f_l(input)
+#
+#        # print(input.shape)
+#
+#        new_shape = list(X.shape)
+#        new_shape[-1] = 4
+#        # X comes in as a batch X ... X 3
+#        return sampled.reshape(new_shape)
+#
+#    def gen(self, ray_bundle, z, **kwargs):
+#        rays_points_world = ray_bundle_to_ray_points(ray_bundle)
+#        res = self(rays_points_world, z)
+#        return res[..., 0:1], res[..., 1:]
+#
+#
+#
+#    def gen(self, ray_bundle, z, **kwargs):
+#        rays_points_world = ray_bundle_to_ray_points(ray_bundle)
+#        res = self(rays_points_world, z)
+#        return res[..., 0:1], res[..., 1:]
+#
+#    def random_gen(self, ray_bundle, **kwargs):
+#        # first convert the ray origins, directions and lengths
+#        # to 3D ray point locations in world coords
+#        return self.gen(ray_bundle, torch.randn((30,), device=self.device))
+#
