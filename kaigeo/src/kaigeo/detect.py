@@ -1,14 +1,8 @@
 from collections import defaultdict
 import base64
-from cmath import inf
-from email.policy import default
 from io import BytesIO
-from re import A, I
-import re
-from wsgiref import headers
 
-from PIL import Image
-
+import requests
 import torch
 import torchvision
 import torchvision.transforms as T
@@ -109,12 +103,6 @@ CATEGORY_NAMES = [
 ]
 
 
-def get_model():
-    return torchvision.models.detection.ssdlite320_mobilenet_v3_large(
-        pretrained=True, progress=False
-    ).eval()
-
-
 def _get_box(box):
     x = box[0]
     y = box[1]
@@ -170,7 +158,11 @@ class AnnotationRanker:
         # with more than one category.. unless
         # there is only the smallest category
 
-        delete_thing, delete_i, delete_score = None, None, inf
+        delete_thing, delete_i, delete_score = (
+            None,
+            None,
+            2.0,
+        )  # The highest score is 1.0
         for thing_k, thing in self.things.items():
             # if there is at least one category
             # bigger than 1. we
@@ -189,7 +181,7 @@ class AnnotationRanker:
 
 def detect(model, video_file: str, top: int = 10):
     """Returns the top objects detected in a video."""
-    reader = torchvision.io.VideoReader(video_file)  # , "video")
+    reader = torchvision.io.VideoReader(video_file)
     ranker = AnnotationRanker(top)
 
     # we only need to process every few frames
@@ -200,8 +192,8 @@ def detect(model, video_file: str, top: int = 10):
         with torch.no_grad():
             outputs = model(frame.permute(0, 2, 1)[None] / 255.0)[0]
 
-        for box, label_idx, score in zip(
-            outputs["boxes"], outputs["labels"], outputs["scores"]
+        for box, label_idx, mask, score in zip(
+            outputs["boxes"], outputs["labels"], outputs["masks"], outputs["scores"]
         ):
             label = CATEGORY_NAMES[label_idx]
             box = box.detach().numpy()
@@ -215,8 +207,14 @@ def detect(model, video_file: str, top: int = 10):
             score = float(score.detach())
 
             extracted_frame = _get_extracted_frame(frame, box)
-            if (extracted_frame.shape[1] == 0) or (extracted_frame.shape[2] == 0):
+            extracted_mask = _get_extracted_frame(mask, box)
+
+            if extracted_frame.shape[1] == 0 or extracted_frame.shape[2] == 0:
                 print("skipping", extracted_frame.shape)
+                continue
+
+            if extracted_mask.shape[1] == 0 or extracted_mask.shape[2] == 0:
+                print("skipping", extracted_mask.shape)
                 continue
 
             annotation = {}
@@ -229,6 +227,16 @@ def detect(model, video_file: str, top: int = 10):
                 "width": float(extracted_frame.shape[1]),
                 "height": float(extracted_frame.shape[2]),
                 "data": extracted_frame,  # _get_encoded_png(extracted_frame),
+            }
+            annotation["maskImageData"] = {
+                "width": float(mask.shape[1]),
+                "height": float(mask.shape[2]),
+                "data": mask,
+            }
+            annotation["extractedMaskImageData"] = {
+                "width": float(extracted_mask.shape[1]),
+                "height": float(extracted_mask.shape[2]),
+                "data": extracted_mask,
             }
             annotation["category"] = label
             annotation["score"] = float(score)
@@ -243,10 +251,7 @@ def detect(model, video_file: str, top: int = 10):
     return ranker.get_things()
 
 
-import requests
-
-
-def detect_for_api(headers, feedItemId, model, video_file: str, top: int = 30):
+def detect_for_api(headers, backend, feedItemId, model, video_file: str, top: int = 30):
     annotations = detect(model, video_file, top)
 
     for annotation in annotations:
@@ -256,12 +261,20 @@ def detect_for_api(headers, feedItemId, model, video_file: str, top: int = 30):
         annotation["extractedImageData"]["data"] = _get_encoded_png(
             annotation["extractedImageData"]["data"]
         )
+
+        annotation["maskImageData"]["data"] = _get_encoded_png(
+            annotation["maskImageData"]["data"]
+        )
+        annotation["extractedMaskImageData"]["data"] = _get_encoded_png(
+            annotation["extractedMaskImageData"]["data"]
+        )
+
         annotation["feedItemId"] = feedItemId
 
         requests.post(
-            "https://backend.kaimerra.com/feed/annotate",
+            f"{backend}/feed/annotate",
             json=annotation,
-            headers=headers
+            headers=headers,
         )
 
     return annotations
