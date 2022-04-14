@@ -1,4 +1,3 @@
-from tkinter import W
 import requests
 
 import os
@@ -107,7 +106,7 @@ def process_item(headers, backend, feed_item):
         in_path = os.path.join(workdir, "input_vid")
         with open(in_path, "wb") as f:
             f.write(r.content)
-        logger.info("Down downloading %s...", url)
+        logger.info("Done downloading %s...", url)
 
         # 3. Convert the video
         logger.info("Converting... %s", in_path)
