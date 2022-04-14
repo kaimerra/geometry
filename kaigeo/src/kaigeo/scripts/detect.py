@@ -1,5 +1,6 @@
 import requests
 
+from datetime import datetime, timedelta
 import os
 import requests
 import torchvision
@@ -7,6 +8,7 @@ import numpy as np
 import logging
 import subprocess
 import tempfile
+import time
 
 from contextlib import contextmanager
 
@@ -18,6 +20,46 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig()
 
 model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True).eval()
+
+
+class AccessTimer:
+    """Get a new bearer token every so often."""
+
+    def __init__(self, logger, auth_client_id, auth_client_secret):
+        self.auth_client_id = auth_client_id
+        self.auth_client_secret = auth_client_secret
+        self.timeout = timedelta(hours=1)
+
+        self.last_time = None
+        self.bearer = None
+
+        self.logger = logger
+
+    def _get_bearer(self):
+        payload = {
+            "client_id": self.auth_client_id,
+            "client_secret": self.auth_client_secret,
+            "audience": "https://backend.kaimerra.com",
+            "grant_type": "client_credentials",
+        }
+
+        resp = requests.post(
+            "https://dev-ajfk-6oq.us.auth0.com/oauth/token", json=payload
+        )
+        resp.raise_for_status()
+
+        self.bearer = resp.json()["access_token"]
+        self.last_time = datetime.now()
+
+    def get_headers(self):
+        return {"authorization": f"Bearer {self.get_bearer()}"}
+
+    def get_bearer(self):
+        if self.last_time is None or (datetime.now() - self.last_time > self.timeout):
+            self.logger.info("Generating new bearer token")
+            self._get_bearer()
+
+        return self.bearer
 
 
 class ExceptionThresholder:
@@ -41,48 +83,42 @@ def run():
     auth_client_id = os.environ["AUTH_CLIENT_ID"]
     auth_client_secret = os.environ["AUTH_CLIENT_SECRET"]
     backend = os.environ.get("BACKEND", "https://backend.kaimerra.com")
-    payload = {
-        "client_id": auth_client_id,
-        "client_secret": auth_client_secret,
-        "audience": "https://backend.kaimerra.com",
-        "grant_type": "client_credentials",
-    }
 
-    resp = requests.post("https://dev-ajfk-6oq.us.auth0.com/oauth/token", json=payload)
-    resp.raise_for_status()
-
-    bearer = resp.json()["access_token"]
-
-    print("bearer", bearer)
-
-    headers = {"authorization": f"Bearer {bearer}"}
-
-    resp = requests.get(f"{backend}/feed", headers=headers)
-    resp.raise_for_status()
-
-    feed = resp.json()
-
+    access_timer = AccessTimer(logger, auth_client_id, auth_client_secret)
     thresholder = ExceptionThresholder()
 
     # For now, lets process anything that doesn't have any annotations.
-    for feed_item in feed:
+    while True:
         with thresholder.guard():
-            feed_item_id = feed_item["_id"]
+            logger.info("Checking for new feed items.")
+            headers = access_timer.get_headers()
 
-            logger.info("Determining if we should process %s", feed_item_id)
-            if "annotationsState" in feed_item:
-                logger.info(
-                    "Skipping processing feedItemId: %s due to annotationState: %s",
-                    feed_item_id,
-                    feed_item["annotationsState"],
-                )
-                continue
+            resp = requests.get(f"{backend}/feed", headers=headers)
+            resp.raise_for_status()
+            feed = resp.json()
 
-            logger.info("Processing %s", feed_item_id)
-            process_item(headers, backend, feed_item)
-            logger.info("Done processing %s", feed_item_id)
+            for feed_item in feed:
+                with thresholder.guard():
+                    headers = access_timer.get_headers()
+                    feed_item_id = feed_item["_id"]
 
-    logger.info("Done processing all feed items.")
+                    logger.info("Determining if we should process %s", feed_item_id)
+                    if "annotationsState" in feed_item:
+                        logger.info(
+                            "Skipping processing feedItemId: %s due to annotationState: %s",
+                            feed_item_id,
+                            feed_item["annotationsState"],
+                        )
+                        continue
+
+                    logger.info("Processing %s", feed_item_id)
+                    process_item(headers, backend, feed_item)
+                    logger.info("Done processing %s", feed_item_id)
+
+            logger.info("Done processing all feed items.")
+
+        # Sleep between checks for new feed items.
+        time.sleep(2.0)
 
 
 def process_item(headers, backend, feed_item):
