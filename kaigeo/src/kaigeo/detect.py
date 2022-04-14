@@ -275,6 +275,6 @@ def detect_for_api(headers, backend, feedItemId, model, video_file: str, top: in
             f"{backend}/feed/annotate",
             json=annotation,
             headers=headers,
-        )
+        ).raise_for_status()
 
     return annotations
