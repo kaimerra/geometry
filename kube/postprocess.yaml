@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "postprocess"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      App: postprocess
+  template:
+    metadata:
+      labels:
+        App: postprocess
+    spec:
+      containers:
+        - name: postprocess
+          image: us-central1-docker.pkg.dev/centered-kiln-339423/kaimerra-central/postprocess:0.0.2
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 500m
+              ephemeral-storage: 1Gi
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              ephemeral-storage: 1Gi
+              memory: 2Gi
+          env:
+            - name: AUTH_CLIENT_ID
+              value: G80nMdwYO8Z3TAyBdRN7ud9kUP8dxd2M
+            - name: AUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: auth0-mm-client-secret
+                  key: secret
