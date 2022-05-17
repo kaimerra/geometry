@@ -102,13 +102,13 @@ def run():
                     headers = access_timer.get_headers()
                     feed_item_id = feed_item["_id"]
 
-                    logger.info("Determining if we should process %s", feed_item_id)
+                    #logger.info("Determining if we should process %s", feed_item_id)
                     if "annotationsState" in feed_item:
-                        logger.info(
-                            "Skipping processing feedItemId: %s due to annotationState: %s",
-                            feed_item_id,
-                            feed_item["annotationsState"],
-                        )
+                        #logger.info(
+                        #    "Skipping processing feedItemId: %s due to annotationState: %s",
+                        #    feed_item_id,
+                        #    feed_item["annotationsState"],
+                        #)
                         continue
 
                     logger.info("Processing %s", feed_item_id)
@@ -118,7 +118,7 @@ def run():
             logger.info("Done processing all feed items.")
 
         # Sleep between checks for new feed items.
-        time.sleep(2.0)
+        time.sleep(10.0)
 
 
 def process_item(headers, backend, feed_item):
